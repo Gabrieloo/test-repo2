@@ -20,41 +20,32 @@ painlessMesh  mesh;
 uint32_t nNodoGatewayId;
 bool bCoordinadorConectado;
 bool bTodosLosNodosADormir;
+bool bDatoRecibidoEnGateway;
 
 // User stub
-void sendMessage() ; // Prototype so PlatformIO doesn't complain
+
+// Prototypes so PlatformIO doesn't complain
 void pedirDato();
 void leerDato();
 void EsperarTodosLosNodosParaDormir();
 void ComandoADormir();
+void ConfirmacionRecibido();
 
 //------ Debug Sync
 void LEDOn();
 void LEDOff();
 //------
 
-Task taskSendMessage( TASK_SECOND * 1 , TASK_FOREVER, &sendMessage );
 Task taskPedirDatoAArduino(TASK_SECOND * 1, TASK_ONCE, &pedirDato, &userScheduler, true);
 Task taskLeerDatoSerial(TASK_SECOND * 1, TASK_ONCE, &leerDato, &userScheduler, false);
-Task taskEsperarTodosLosNodosParaDormir(TASK_SECOND * 1 , TASK_FOREVER, &EsperarTodosLosNodosParaDormir, &userScheduler, false);
+Task taskEsperarConfirmacionRecibidoGateway(TASK_SECOND * 3, TASK_ONCE, &ConfirmacionRecibido, &userScheduler, false);
+Task taskEsperarTodosLosNodosParaDormir(TASK_SECOND * 0 , TASK_FOREVER, &EsperarTodosLosNodosParaDormir, &userScheduler, false);
 Task taskComandoADormir(TASK_SECOND * 1 , TASK_ONCE, &ComandoADormir, &userScheduler, false);
 //Task leerDato(TASK_SECOND * 1, TASK_ONCE, &leerDato, &userScheduler, true);
 
 //------ Debug Sync
 Task tLED(TASK_SECOND * 3, TASK_FOREVER, NULL, &userScheduler, false, NULL, &LEDOff);
 //------
-
-void sendMessage() {
-
-  Serial.printf("sendMessage ejecutandosep\n");
-
-  //Serial.printf("mesh.getNodeList().size() : %u\n", mesh.getNodeList().size()); //gab
-
-  //String msg = "Hello from node ";
-  //msg += mesh.getNodeId();
-  //mesh.sendBroadcast( msg );
-  //taskSendMessage.setInterval( random( TASK_SECOND * 1, TASK_SECOND * 5 ));
-}
 
 void pedirDato() {
 
@@ -77,7 +68,8 @@ void leerDato() {
       data = "Dato_"+data;
       mesh.sendSingle(nNodoGatewayId, data);
       Serial.printf("DatoEnviado\n");
-      //datoEnviadoACoordinador = true;
+
+      taskEsperarConfirmacionRecibidoGateway.restartDelayed();
 
       //---------------------SLEEP (Descomentar)------------------------
       taskEsperarTodosLosNodosParaDormir.enable();
@@ -94,7 +86,7 @@ void leerDato() {
 void EsperarTodosLosNodosParaDormir() {
 
   if(bTodosLosNodosADormir){
-    taskComandoADormir.enableDelayed(1001 - (mesh.getNodeTime() % (1001 * 1000))/1000);
+    taskComandoADormir.enable();
   }
 
 }
@@ -109,6 +101,14 @@ void ComandoADormir(){
   //------
 }
 
+void ConfirmacionRecibido(){
+  if(bDatoRecibidoEnGateway == true){
+    taskEsperarTodosLosNodosParaDormir.enable();
+  }else{
+    taskPedirDatoAArduino.restartDelayed();
+  }
+}
+
 // Needed for painless library
 void receivedCallback( uint32_t from, String &msg ) {
   //Serial.printf("startHere: Received from %u msg=%s\n", from, msg.c_str());
@@ -120,6 +120,10 @@ void receivedCallback( uint32_t from, String &msg ) {
 
   if( msg == "TodosLosNodosADormir"){
     bTodosLosNodosADormir = true;
+  }
+
+  if( msg == "recibido"){
+    bDatoRecibidoEnGateway = true;
   }
 
 }
@@ -141,6 +145,7 @@ void setup() {
 
   bCoordinadorConectado = false;
   bTodosLosNodosADormir = false;
+  bDatoRecibidoEnGateway = false;
 
   Serial.begin(115200);
 
@@ -157,8 +162,6 @@ void setup() {
   mesh.onChangedConnections(&changedConnectionCallback);
   mesh.onNodeTimeAdjusted(&nodeTimeAdjustedCallback);
 
-  userScheduler.addTask( taskSendMessage );
-  //taskSendMessage.enable();
   taskPedirDatoAArduino.enable();
 }
 
