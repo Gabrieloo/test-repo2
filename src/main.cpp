@@ -53,7 +53,7 @@ void pedirDato() {
   taskLeerDatoSerial.restartDelayed();
 
 }
-
+ 
 void leerDato() {
   //bool datoRecibidoDeArduino = false;
   //bool datoEnviadoACoordinador = false;
